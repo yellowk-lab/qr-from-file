@@ -1,0 +1,19 @@
+{
+  "name": "qr-from-excel",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "node ./index.js"
+  },
+  "keywords": [],
+  "author": "YellowK Labs",
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^5.0.5",
+    "qrcode": "^1.5.3",
+    "xlsx": "^0.18.5"
+  }
+}
