@@ -2,6 +2,9 @@ import XLSX from "xlsx";
 import { toFile } from "qrcode";
 import { readdir, mkdir, rmdir, lstat, readFile } from "node:fs/promises";
 import { input, select } from "@inquirer/prompts";
+import Jimp from "jimp";
+import PDFDocument from "pdfkit";
+import { createWriteStream } from "node:fs";
 
 const currentDirPattern = "./";
 const inputDataFolderName = "data";
@@ -9,7 +12,7 @@ const brandsFolderName = "brands";
 
 async function main() {
   await createInitialFoldersIfNecessary();
-  const filesChoices = await getAllowedFilesAsChoices();
+  const filesChoices = await getAllowedFilesAsChoices([".xlsx", ".json"]);
 
   if (filesChoices.length > 0) {
     const brandPath = currentDirPattern.concat(brandsFolderName);
@@ -45,10 +48,35 @@ async function main() {
       "/",
       fileName
     );
+    const flyerFileTemplateFiles = await getAllowedFilesAsChoices([".png"]);
+    flyerFileTemplateFiles.push({ name: "No flyer", value: "" });
+    const flyerName = await select({
+      message: "Select the file you want to generate QR Codes from:",
+      choices: flyerFileTemplateFiles,
+    });
+    const flyerFilePath = currentDirPattern.concat(
+      inputDataFolderName,
+      "/",
+      flyerName
+    );
     if (fileName.endsWith(".json")) {
       await generateQRCodesFromJSON(filePath, currentEventDirPath);
+      if (flyerName.length > 0) {
+        await generatePdfFlyers(
+          flyerFilePath,
+          currentEventDirPath,
+          currentEventDirPath
+        );
+      }
     } else if (fileName.endsWith(".xlsx")) {
       await generateQRCodesFromExcelFile(filePath, currentEventDirPath);
+      if (flyerName.length > 0) {
+        await generatePdfFlyers(
+          flyerFilePath,
+          currentEventDirPath,
+          currentEventDirPath
+        );
+      }
     } else {
       console.log("File type not allowed");
     }
@@ -85,11 +113,15 @@ const selectFolderFromPath = async (dirPath) => {
   }
 };
 
-const getAllowedFilesAsChoices = async () => {
+const getAllowedFilesAsChoices = async (allowed) => {
   const files = await readdir(currentDirPattern.concat(inputDataFolderName));
-  const filteredFiles = files.filter(
-    (file) => file.endsWith(".xlsx") || file.endsWith(".json")
-  );
+  const filteredFiles = files.filter((file) => {
+    for (let i = 0; i < allowed.length; i++) {
+      if (file.endsWith(allowed[i])) {
+        return file;
+      }
+    }
+  });
   return filteredFiles.map((f) => {
     return { name: f, value: f };
   });
@@ -122,7 +154,11 @@ const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
     const fileData = await readFile(filePath);
     const fileJSON = JSON.parse(fileData);
     let { baseUrl } = fileJSON;
-    if (baseUrl && typeof fileJSON.baseUrl == "string" && baseUrl.length >= 10) {
+    if (
+      baseUrl &&
+      typeof fileJSON.baseUrl == "string" &&
+      baseUrl.length >= 10
+    ) {
       if (fileJSON.hash?.length > 0) {
         if (!baseUrl.endsWith("/")) {
           baseUrl = baseUrl.concat("/");
@@ -132,7 +168,7 @@ const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
           const outputPath = `${saveDirPath}/qr_${i + 1}.png`;
           const hash = fileJSON.hash[i];
           const qrDataUrl = baseUrl.concat(hash);
-          await toFile(outputPath, qrDataUrl);
+          await toFile(outputPath, qrDataUrl, { color: { light: "#0000" } });
           console.log(`Generated QR code for ${qrDataUrl} at ${outputPath}`);
           counter++;
         }
@@ -150,6 +186,43 @@ const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
     }
   } catch (err) {
     console.log(err);
+  }
+};
+
+const generatePdfFlyers = async (
+  designFilePath,
+  qrCodesDirPath,
+  outputDirPath
+) => {
+  try {
+    const qrCodes = await readdir(qrCodesDirPath);
+    if (qrCodes.length > 0) {
+      const outputFileName = outputDirPath.concat("/flyer.pdf");
+      const doc = new PDFDocument({ size: "A4", autoFirstPage: false });
+      doc.pipe(createWriteStream(outputFileName));
+      for (let i = 0; i < qrCodes.length; i++) {
+        doc.addPage();
+
+        const flyer = await Jimp.read(designFilePath);
+        const qrImage = await Jimp.read(qrCodesDirPath.concat("/", qrCodes[i]));
+        qrImage.resize(650, 650);
+
+        const xPosition = (flyer.bitmap.width - qrImage.bitmap.width) / 2;
+        const yPosition = (flyer.bitmap.height - qrImage.bitmap.height) / 2;
+
+        flyer.composite(qrImage, xPosition, yPosition);
+
+        const flyerTempPath = outputDirPath.concat("/", "flyer", i, ".jpg");
+        await flyer.writeAsync(flyerTempPath);
+        doc.image(flyerTempPath, 0, 0, { fit: [595, 842] });
+      }
+
+      doc.end();
+    } else {
+      console.log("No qr codes to generate flyers");
+    }
+  } catch (error) {
+    console.log(error);
   }
 };
 
