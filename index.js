@@ -1,6 +1,6 @@
 import XLSX from "xlsx";
 import { toFile } from "qrcode";
-import { readdir, mkdir, rmdir, lstat } from "node:fs/promises";
+import { readdir, mkdir, rmdir, lstat, readFile } from "node:fs/promises";
 import { input, select } from "@inquirer/prompts";
 
 const currentDirPattern = "./";
@@ -9,7 +9,7 @@ const brandsFolderName = "brands";
 
 async function main() {
   await createInitialFoldersIfNecessary();
-  const filesChoices = await getExcelFilesAsChoices();
+  const filesChoices = await getAllowedFilesAsChoices();
 
   if (filesChoices.length > 0) {
     const brandPath = currentDirPattern.concat(brandsFolderName);
@@ -36,16 +36,22 @@ async function main() {
       currentEventDirPath = currentBrandDirPath.concat("/", eventName);
       await mkdir(currentEventDirPath);
     }
-    const excelFileName = await select({
+    const fileName = await select({
       message: "Select the file you want to generate QR Codes from:",
       choices: filesChoices,
     });
-    const excelFilePath = currentDirPattern.concat(
+    const filePath = currentDirPattern.concat(
       inputDataFolderName,
       "/",
-      excelFileName
+      fileName
     );
-    await generateQRCodesFromExcelFile(excelFilePath, currentEventDirPath);
+    if (fileName.endsWith(".json")) {
+      await generateQRCodesFromJSON(filePath, currentEventDirPath);
+    } else if (fileName.endsWith(".xlsx")) {
+      await generateQRCodesFromExcelFile(filePath, currentEventDirPath);
+    } else {
+      console.log("File type not allowed");
+    }
   } else {
     console.log(
       `No input files to generate qr codes.\nAdd Excel file into ${inputDataFolderName} folder before launch script`
@@ -79,9 +85,11 @@ const selectFolderFromPath = async (dirPath) => {
   }
 };
 
-const getExcelFilesAsChoices = async () => {
+const getAllowedFilesAsChoices = async () => {
   const files = await readdir(currentDirPattern.concat(inputDataFolderName));
-  const filteredFiles = files.filter((file) => file.endsWith(".xlsx"));
+  const filteredFiles = files.filter(
+    (file) => file.endsWith(".xlsx") || file.endsWith(".json")
+  );
   return filteredFiles.map((f) => {
     return { name: f, value: f };
   });
@@ -107,6 +115,42 @@ const generateQRCodesFromExcelFile = async (excelFilePath, saveDirPath) => {
 
   console.log(`\nGenerated a total of ${count} QR codes.`);
   console.log(`Data sourced from sheet: "${sheetName}" in the workbook.`);
+};
+
+const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
+  try {
+    const fileData = await readFile(filePath);
+    const fileJSON = JSON.parse(fileData);
+    let { baseUrl } = fileJSON;
+    if (baseUrl && typeof fileJSON.baseUrl == "string" && baseUrl.length >= 10) {
+      if (fileJSON.hash?.length > 0) {
+        if (!baseUrl.endsWith("/")) {
+          baseUrl = baseUrl.concat("/");
+        }
+        let counter = 0;
+        for (let i = 0; i < fileJSON.hash.length; i++) {
+          const outputPath = `${saveDirPath}/qr_${i + 1}.png`;
+          const hash = fileJSON.hash[i];
+          const qrDataUrl = baseUrl.concat(hash);
+          await toFile(outputPath, qrDataUrl);
+          console.log(`Generated QR code for ${qrDataUrl} at ${outputPath}`);
+          counter++;
+        }
+        console.log(`\nGenerated a total of ${counter} QR codes.`);
+        console.log("Data sourced from json file");
+      } else {
+        console.log(
+          "not hash The file must content a property named 'hash' which is an array containing strings with at least 1 element"
+        );
+      }
+    } else {
+      console.log(
+        "The file must content a property named 'baseUrl' with the url as a string"
+      );
+    }
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 const createInitialFoldersIfNecessary = async () => {
