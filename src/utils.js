@@ -1,11 +1,17 @@
 import { v4 as uuidv4 } from "uuid";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import {
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  createWriteStream,
+} from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { readFile, mkdir, readdir } from "node:fs/promises";
 import path from "path";
 import { toFile } from "qrcode";
 import Jimp from "jimp";
-import PDFDocument from "pdfkit";
-import { createWriteStream } from "node:fs";
+import PDFDocumentKit from "pdfkit";
+import { PDFDocument } from "pdf-lib";
 
 const inputDataFolderName = "templates";
 
@@ -54,24 +60,20 @@ export async function handleQrCodesGeneration(
   hasFlyers
 ) {
   console.log("Generating QR codes and JSON file...");
+  const start = performance.now();
   try {
     const { outputPath, qrCodesFolder } = generateQrCodesJSONFile(
       count,
       baseUrl,
       urlParams
     );
-    console.log(`QR codes generated and saved to ${outputPath}`);
 
     const qrsFolder = path.join(qrCodesFolder, "qrs");
     await mkdir(qrsFolder, { recursive: true });
 
-    console.log("Generating QR codes from JSON file...");
     await generateQRCodesFromJSON(outputPath, qrsFolder);
-    console.log("QR codes generated from JSON file");
 
     if (hasFlyers) {
-      console.log("Generating flyers...");
-
       const flyersFolder = path.join(qrCodesFolder, "flyers");
       const flyersPdfFolder = path.join(flyersFolder, "pdf");
       const flyersImgFolder = path.join(flyersFolder, "img");
@@ -82,20 +84,16 @@ export async function handleQrCodesGeneration(
       const flyerFilePath = path.join(
         process.cwd(),
         inputDataFolderName,
-        "/",
-        "halloween_hunt.png"
+        "halloween_template.pdf"
       );
-      await generatePdfFlyers(
-        flyerFilePath,
-        qrsFolder,
-        flyersPdfFolder,
-        flyersImgFolder
-      );
-      console.log("Flyers generated");
+      await generatePdfFlyers(flyerFilePath, qrsFolder, flyersPdfFolder);
     }
   } catch (err) {
     console.log(err);
   }
+  const scriptTime = performance.now() - start;
+  console.log(`Time taken: ${scriptTime} milliseconds`);
+  console.log(`Time taken: ${scriptTime / 1000} seconds`);
 }
 
 export const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
@@ -122,7 +120,6 @@ export const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
           counter++;
         }
         console.log(`\nGenerated a total of ${counter} QR codes.`);
-        console.log("Data sourced from json file");
       } else {
         console.log(
           "not hash The file must content a property named 'hash' which is an array containing strings with at least 1 element"
@@ -138,8 +135,8 @@ export const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
   }
 };
 
-const generatePdfFlyers = async (
-  designFilePath,
+const generateImageFlyers = async (
+  templatePdfPath,
   qrCodesDirPath,
   pdfOutputDir,
   imgOutputDir
@@ -149,13 +146,13 @@ const generatePdfFlyers = async (
     const qrCodes = allFiles.filter((file) => file.endsWith(".png"));
     if (qrCodes.length > 0) {
       const outputFileName = path.join(pdfOutputDir, "flyers.pdf");
-      const doc = new PDFDocument({ size: "A4", autoFirstPage: false });
+      const doc = new PDFDocumentKit({ size: "A4", autoFirstPage: false });
       doc.pipe(createWriteStream(outputFileName));
 
       for (let i = 1; i <= qrCodes.length; i++) {
         doc.addPage();
 
-        const flyer = await Jimp.read(designFilePath);
+        const flyer = await Jimp.read(templatePdfPath);
         const qrImage = await Jimp.read(
           qrCodesDirPath.concat("/", qrCodes[i - 1])
         );
@@ -173,6 +170,53 @@ const generatePdfFlyers = async (
       }
 
       doc.end();
+    } else {
+      console.log("No qr codes to generate flyers");
+    }
+  } catch (error) {
+    console.log("Error in generatePdfFlyers:", error);
+  }
+};
+
+export const generatePdfFlyers = async (
+  templatePdfPath,
+  qrCodesDirPath,
+  pdfOutputDir
+) => {
+  try {
+    const allFiles = await readdir(qrCodesDirPath);
+    const qrCodes = allFiles.filter((file) => file.endsWith(".png"));
+    if (qrCodes.length > 0) {
+      console.log("Inserting QR Codes from into pdf files...");
+
+      for (let i = 1; i <= qrCodes.length; i++) {
+        const outputFileName = path.join(pdfOutputDir, `flyer_${i}.pdf`);
+        try {
+          const qrCodeImagePath = qrCodesDirPath.concat("/", qrCodes[i - 1]);
+          const pdfBuffer = await readFile(templatePdfPath);
+          const pngBuffer = await readFile(qrCodeImagePath);
+
+          const existingPdf = await PDFDocument.load(pdfBuffer);
+          const pngImage = await existingPdf.embedPng(pngBuffer);
+          const existingPdfPages = existingPdf.getPages();
+          const firstPage = existingPdfPages[0];
+
+          const pngDims = pngImage.scale(0.7);
+          const xPosition = 374;
+          const yPosition = 329;
+
+          firstPage.drawImage(pngImage, {
+            x: xPosition,
+            y: yPosition,
+            width: pngDims.width,
+            height: pngDims.height,
+          });
+          const pdfBytes = await existingPdf.save(outputFileName);
+          await writeFile(outputFileName, pdfBytes);
+        } catch (err) {
+          console.log("Error copying file:", err);
+        }
+      }
     } else {
       console.log("No qr codes to generate flyers");
     }
