@@ -2,11 +2,11 @@
   "name": "qr-from-excel",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node ./index.js"
+    "dev": "node src/index.js"
   },
   "keywords": [],
   "author": "YellowK Labs",
@@ -16,6 +16,7 @@
     "jimp": "^0.22.12",
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.3",
+    "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   }
 }
