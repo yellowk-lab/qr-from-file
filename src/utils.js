@@ -116,7 +116,6 @@ export const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
           const hash = fileJSON.hash[i];
           const qrDataUrl = baseUrl.concat(hash).concat(urlParams);
           await toFile(outputPath, qrDataUrl, { color: { light: "#0000" } });
-          console.log(`Generated QR code for ${qrDataUrl} at ${outputPath}`);
           counter++;
         }
         console.log(`\nGenerated a total of ${counter} QR codes.`);
