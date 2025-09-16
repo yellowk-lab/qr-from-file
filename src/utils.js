@@ -14,7 +14,7 @@ import PDFDocumentKit from "pdfkit";
 import { PDFDocument } from "pdf-lib";
 
 const inputDataFolderName = "templates";
-const maxFileSizeGB = 3.5;
+const maxFileSizeGB = 4;
 const maxFileSizeBytes = maxFileSizeGB * 1024 * 1024 * 1024;
 
 export const generateUUID = (count) => {
@@ -60,7 +60,8 @@ export async function handleQrCodesGeneration(
   baseUrl,
   urlParams,
   hasFlyers,
-  pagesOneByOne
+  groupByPages,
+  maxPagesPerPdf = 100
 ) {
   console.log("Generating QR codes and JSON file...");
   const start = performance.now();
@@ -93,7 +94,8 @@ export async function handleQrCodesGeneration(
         flyerFilePath,
         qrsFolder,
         flyersPdfFolder,
-        pagesOneByOne
+        groupByPages,
+        maxPagesPerPdf
       );
     }
   } catch (err) {
@@ -189,16 +191,22 @@ export const generatePdfFlyers = async (
   templatePdfPath,
   qrCodesDirPath,
   pdfOutputDir,
-  pagesOneByOne
+  groupByPages,
+  maxPagesPerPdf = 100
 ) => {
-  if (pagesOneByOne) {
-    await createPdfPagesOneByOne(qrCodesDirPath, pdfOutputDir, templatePdfPath);
+  if (groupByPages === "true") {
+    console.log("Creating all in one PDF...");
+    await createAllInOnePdf(qrCodesDirPath, pdfOutputDir, templatePdfPath);
+  } else if (groupByPages === "pages") {
+    console.log("Creating PDFs grouped by page count...");
+    await createAllInOnePdfByPages(qrCodesDirPath, pdfOutputDir, templatePdfPath, maxPagesPerPdf);
   } else {
-    await createPdfOneByOne(qrCodesDirPath, pdfOutputDir, templatePdfPath);
+    console.log("Creating one PDF per page...");
+    await createOnePdfPerPage(qrCodesDirPath, pdfOutputDir, templatePdfPath);
   }
 };
 
-const createPdfOneByOne = async (
+const createOnePdfPerPage = async (
   qrCodesDirPath,
   pdfOutputDir,
   templatePdfPath
@@ -245,7 +253,7 @@ const createPdfOneByOne = async (
   }
 };
 
-const createPdfPagesOneByOne = async (
+const createAllInOnePdf = async (
   qrCodesDirPath,
   pdfOutputDir,
   templatePdfPath
@@ -360,5 +368,114 @@ const createPdfPagesOneByOne = async (
     }
   } catch (error) {
     console.log("Error in generatePdfFlyers:", error);
+  }
+};
+
+const createAllInOnePdfByPages = async (
+  qrCodesDirPath,
+  pdfOutputDir,
+  templatePdfPath,
+  maxPagesPerPdf = 100
+) => {
+  try {
+    const allFiles = await readdir(qrCodesDirPath);
+    const qrCodes = allFiles.filter((file) => file.endsWith(".png"));
+    if (qrCodes.length > 0) {
+      console.log("Inserting QR Codes into PDF files with page monitoring...");
+      console.log(`Total QR codes to process: ${qrCodes.length}`);
+      console.log(`Max pages per PDF: ${maxPagesPerPdf}`);
+
+      console.log("Loading template PDF...");
+      const templatePdfBuffer = await readFile(templatePdfPath);
+      const templatePdf = await PDFDocument.load(templatePdfBuffer);
+      const templatePages = templatePdf.getPages();
+      const templatePage = templatePages[0];
+      console.log("Template PDF loaded successfully");
+
+      let currentPdfIndex = 1;
+      let currentPdf = null;
+      let qrCodeIndex = 0;
+
+      for (let i = 0; i < qrCodes.length; i++) {
+        try {
+          if ((i + 1) % 100 === 0 || i === 0) {
+            console.log(
+              `Processing QR code ${i + 1}/${qrCodes.length} (${(
+                ((i + 1) / qrCodes.length) *
+                100
+              ).toFixed(1)}%)`
+            );
+          }
+
+          const qrCodeImagePath = qrCodesDirPath.concat("/", qrCodes[i]);
+          const pngBuffer = await readFile(qrCodeImagePath);
+
+          if (!currentPdf) {
+            currentPdf = await PDFDocument.create();
+            qrCodeIndex = 0;
+            console.log(`Starting new PDF file: flyer_${currentPdfIndex}.pdf`);
+          }
+
+          const [copiedTemplatePage] = await currentPdf.copyPages(templatePdf, [
+            0,
+          ]);
+          currentPdf.addPage(copiedTemplatePage);
+
+          const pages = currentPdf.getPages();
+          const lastPage = pages[pages.length - 1];
+
+          const pngImage = await currentPdf.embedPng(pngBuffer);
+          const pngDims = pngImage.scale(0.95);
+          const xPosition = 370;
+          const yPosition = 324;
+
+          lastPage.drawImage(pngImage, {
+            x: xPosition,
+            y: yPosition,
+            width: pngDims.width,
+            height: pngDims.height,
+          });
+
+          qrCodeIndex++;
+
+          const isLastQrCode = i === qrCodes.length - 1;
+          const exceedsPageLimit = qrCodeIndex >= maxPagesPerPdf;
+
+          if (exceedsPageLimit || isLastQrCode) {
+            const outputFileName = path.join(
+              pdfOutputDir,
+              `flyer_${currentPdfIndex}.pdf`
+            );
+            const pdfBytes = await currentPdf.save();
+            await writeFile(outputFileName, pdfBytes);
+            
+            const sizeMB = (pdfBytes.length / (1024 * 1024)).toFixed(1);
+            console.log(
+              `✅ Created flyer_${currentPdfIndex}.pdf with ${qrCodeIndex} pages (${sizeMB} MB)`
+            );
+
+            if (exceedsPageLimit && !isLastQrCode) {
+              currentPdf = await PDFDocument.create();
+              qrCodeIndex = 0;
+              currentPdfIndex++;
+              console.log(
+                `📄 Starting new PDF file: flyer_${currentPdfIndex}.pdf (page limit reached)`
+              );
+            }
+          }
+        } catch (err) {
+          console.log(
+            `❌ Error processing QR code ${i + 1} (${qrCodes[i]}):`,
+            err.message
+          );
+        }
+      }
+
+      console.log(`Total PDF files created: ${currentPdfIndex}`);
+    } else {
+      console.log("No qr codes to generate flyers");
+    }
+  } catch (error) {
+    console.log("Error in createAllInOnePdfByPages:", error);
   }
 };

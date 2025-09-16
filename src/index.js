@@ -1,20 +1,34 @@
 import XLSX from "xlsx";
 import { toFile } from "qrcode";
-import { readdir, mkdir, lstat } from "node:fs/promises";
+import { readdir, mkdir, lstat, writeFile, rm } from "node:fs/promises";
 import { input, select } from "@inquirer/prompts";
 import Jimp from "jimp";
 import PDFDocument from "pdfkit";
 import { createWriteStream } from "node:fs";
+import path from "path";
 import { handleQrCodesGeneration, generateQRCodesFromJSON } from "./utils.js";
+import { verifyPDFQRCodes, generateVerificationReport } from "./verify.js";
 
 const currentDirPattern = "./src";
 const inputDataFolderName = "data";
 const brandsFolderName = "brands";
 
 async function main(...args) {
-  const [count, baseUrl, urlParams, hasFlyers, pagesOneByOne] = args;
-  if (count && baseUrl) {
-    await handleQrCodesGeneration(count, baseUrl, urlParams, hasFlyers, pagesOneByOne);
+  const [command, ...commandArgs] = args;
+
+  if (command === "verify") {
+    await handleVerification(commandArgs);
+  } else if (command && commandArgs.length >= 1) {
+    const [count, baseUrl, urlParams, hasFlyers, groupBy, maxPagesPerPdf] =
+      args;
+    await handleQrCodesGeneration(
+      count,
+      baseUrl,
+      urlParams,
+      hasFlyers,
+      groupBy,
+      maxPagesPerPdf
+    );
   } else {
     await createInitialFoldersIfNecessary();
     const filesChoices = await getAllowedFilesAsChoices([".xlsx", ".json"]);
@@ -189,6 +203,57 @@ const generatePdfFlyers = async (
     }
   } catch (error) {
     console.log(error);
+  }
+};
+
+const handleVerification = async (args) => {
+  const [pdfDir, jsonPath] = args;
+
+  if (!pdfDir || !jsonPath) {
+    console.log(
+      "❌ Usage: node src/index.js verify <pdf-directory> <json-file>"
+    );
+    console.log(
+      "   Example: node src/index.js verify ./outputs/qr-codes-1234567890/flyers/pdf ./outputs/qr-codes-1234567890/qr-codes-1234567890.json"
+    );
+    return;
+  }
+
+  try {
+    // Create temporary directory for processing
+    const tempDir = path.join(process.cwd(), "temp_verification");
+    await mkdir(tempDir, { recursive: true });
+
+    console.log("🔍 Starting PDF QR Code Verification...");
+    console.log(`📁 PDF Directory: ${pdfDir}`);
+    console.log(`📄 JSON File: ${jsonPath}`);
+    console.log(`🗂️  Temp Directory: ${tempDir}\n`);
+
+    const results = await verifyPDFQRCodes(pdfDir, jsonPath, tempDir);
+
+    // Generate and display report
+    const report = generateVerificationReport(results);
+    console.log(report);
+
+    // Save report to file
+    const reportPath = path.join(pdfDir, "verification_report.txt");
+    await writeFile(reportPath, report);
+    console.log(`📊 Report saved to: ${reportPath}`);
+
+    // Clean up temp directory
+    try {
+      await rm(tempDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      console.log(
+        `⚠️  Could not clean up temp directory: ${cleanupError.message}`
+      );
+    }
+
+    // Exit with appropriate code
+    process.exitCode = results.summary.success ? 0 : 1;
+  } catch (error) {
+    console.error("❌ Verification failed:", error.message);
+    process.exitCode = 1;
   }
 };
 

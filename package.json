@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "node src/index.js"
+    "dev": "node src/index.js",
+    "verify": "node src/index.js verify",
+    "example": "node example-verification.js"
   },
   "keywords": [],
   "author": "YellowK Labs",
@@ -17,6 +19,7 @@
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.15.0",
     "qrcode": "^1.5.3",
+    "qrcode-reader": "^1.0.4",
     "uuid": "^13.0.0",
     "xlsx": "^0.18.5"
   }
