@@ -14,6 +14,8 @@ import PDFDocumentKit from "pdfkit";
 import { PDFDocument } from "pdf-lib";
 
 const inputDataFolderName = "templates";
+const maxFileSizeGB = 2.5;
+const maxFileSizeBytes = maxFileSizeGB * 1024 * 1024 * 1024;
 
 export const generateUUID = (count) => {
   return Array.from({ length: count }, () => uuidv4());
@@ -186,36 +188,111 @@ export const generatePdfFlyers = async (
     const allFiles = await readdir(qrCodesDirPath);
     const qrCodes = allFiles.filter((file) => file.endsWith(".png"));
     if (qrCodes.length > 0) {
-      console.log("Inserting QR Codes from into pdf files...");
+      console.log("Inserting QR Codes into PDF files with size monitoring...");
+      console.log(`Total QR codes to process: ${qrCodes.length}`);
 
-      for (let i = 1; i <= qrCodes.length; i++) {
-        const outputFileName = path.join(pdfOutputDir, `flyer_${i}.pdf`);
+      // Load the template PDF once (we won't modify this)
+      console.log("Loading template PDF...");
+      const templatePdfBuffer = await readFile(templatePdfPath);
+      const templatePdf = await PDFDocument.load(templatePdfBuffer);
+      const templatePages = templatePdf.getPages();
+      const templatePage = templatePages[0];
+      console.log("Template PDF loaded successfully");
+
+      let currentPdfIndex = 1;
+      let currentPdf = null;
+      let qrCodeIndex = 0;
+
+      for (let i = 0; i < qrCodes.length; i++) {
         try {
-          const qrCodeImagePath = qrCodesDirPath.concat("/", qrCodes[i - 1]);
-          const pdfBuffer = await readFile(templatePdfPath);
+          // Progress indicator
+          if ((i + 1) % 100 === 0 || i === 0) {
+            console.log(
+              `Processing QR code ${i + 1}/${qrCodes.length} (${(
+                ((i + 1) / qrCodes.length) *
+                100
+              ).toFixed(1)}%)`
+            );
+          }
+
+          const qrCodeImagePath = qrCodesDirPath.concat("/", qrCodes[i]);
           const pngBuffer = await readFile(qrCodeImagePath);
 
-          const existingPdf = await PDFDocument.load(pdfBuffer);
-          const pngImage = await existingPdf.embedPng(pngBuffer);
-          const existingPdfPages = existingPdf.getPages();
-          const firstPage = existingPdfPages[0];
+          if (!currentPdf) {
+            currentPdf = await PDFDocument.create();
+            qrCodeIndex = 0;
+            console.log(`Starting new PDF file: flyer_${currentPdfIndex}.pdf`);
+          }
 
-          const pngDims = pngImage.scale(0.7);
-          const xPosition = 374;
-          const yPosition = 329;
+          // Copy template page
+          const [copiedTemplatePage] = await currentPdf.copyPages(templatePdf, [
+            0,
+          ]);
+          currentPdf.addPage(copiedTemplatePage);
 
-          firstPage.drawImage(pngImage, {
+          // Get the last page and add QR code
+          const pages = currentPdf.getPages();
+          const lastPage = pages[pages.length - 1];
+
+          const pngImage = await currentPdf.embedPng(pngBuffer);
+          const pngDims = pngImage.scale(0.95);
+          const xPosition = 370;
+          const yPosition = 324;
+
+          lastPage.drawImage(pngImage, {
             x: xPosition,
             y: yPosition,
             width: pngDims.width,
             height: pngDims.height,
           });
-          const pdfBytes = await existingPdf.save(outputFileName);
-          await writeFile(outputFileName, pdfBytes);
+
+          qrCodeIndex++;
+
+          const shouldCheckSize =
+            (i + 1) % 50 === 0 || i === qrCodes.length - 1;
+
+          if (shouldCheckSize) {
+            const tempPdfBytes = await currentPdf.save();
+            const newSize = tempPdfBytes.length;
+            const sizeMB = (newSize / (1024 * 1024)).toFixed(1);
+
+            console.log(
+              `Current PDF size: ${sizeMB} MB (${qrCodeIndex} pages)`
+            );
+
+            const isLastQrCode = i === qrCodes.length - 1;
+            const exceedsSizeLimit = newSize >= maxFileSizeBytes;
+
+            if (exceedsSizeLimit || isLastQrCode) {
+              const outputFileName = path.join(
+                pdfOutputDir,
+                `flyer_${currentPdfIndex}.pdf`
+              );
+              await writeFile(outputFileName, tempPdfBytes);
+              const sizeGB = (newSize / (1024 * 1024 * 1024)).toFixed(2);
+              console.log(
+                `✅ Created flyer_${currentPdfIndex}.pdf with ${qrCodeIndex} pages (${sizeGB} GB)`
+              );
+
+              if (exceedsSizeLimit && !isLastQrCode) {
+                currentPdf = await PDFDocument.create();
+                qrCodeIndex = 0;
+                currentPdfIndex++;
+                console.log(
+                  `📄 Starting new PDF file: flyer_${currentPdfIndex}.pdf (size limit reached)`
+                );
+              }
+            }
+          }
         } catch (err) {
-          console.log("Error copying file:", err);
+          console.log(
+            `❌ Error processing QR code ${i + 1} (${qrCodes[i]}):`,
+            err.message
+          );
         }
       }
+
+      console.log(`Total PDF files created: ${currentPdfIndex}`);
     } else {
       console.log("No qr codes to generate flyers");
     }
