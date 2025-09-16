@@ -12,9 +12,9 @@ const inputDataFolderName = "data";
 const brandsFolderName = "brands";
 
 async function main(...args) {
-  const [count, baseUrl, urlParams, hasFlyers] = args;
+  const [count, baseUrl, urlParams, hasFlyers, pagesOneByOne] = args;
   if (count && baseUrl) {
-    await handleQrCodesGeneration(count, baseUrl, urlParams, hasFlyers);
+    await handleQrCodesGeneration(count, baseUrl, urlParams, hasFlyers, pagesOneByOne);
   } else {
     await createInitialFoldersIfNecessary();
     const filesChoices = await getAllowedFilesAsChoices([".xlsx", ".json"]);

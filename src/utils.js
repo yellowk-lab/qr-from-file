@@ -14,7 +14,7 @@ import PDFDocumentKit from "pdfkit";
 import { PDFDocument } from "pdf-lib";
 
 const inputDataFolderName = "templates";
-const maxFileSizeGB = 2.5;
+const maxFileSizeGB = 3.5;
 const maxFileSizeBytes = maxFileSizeGB * 1024 * 1024 * 1024;
 
 export const generateUUID = (count) => {
@@ -59,7 +59,8 @@ export async function handleQrCodesGeneration(
   count,
   baseUrl,
   urlParams,
-  hasFlyers
+  hasFlyers,
+  pagesOneByOne
 ) {
   console.log("Generating QR codes and JSON file...");
   const start = performance.now();
@@ -88,7 +89,12 @@ export async function handleQrCodesGeneration(
         inputDataFolderName,
         "halloween_template.pdf"
       );
-      await generatePdfFlyers(flyerFilePath, qrsFolder, flyersPdfFolder);
+      await generatePdfFlyers(
+        flyerFilePath,
+        qrsFolder,
+        flyersPdfFolder,
+        pagesOneByOne
+      );
     }
   } catch (err) {
     console.log(err);
@@ -182,7 +188,67 @@ const generateImageFlyers = async (
 export const generatePdfFlyers = async (
   templatePdfPath,
   qrCodesDirPath,
-  pdfOutputDir
+  pdfOutputDir,
+  pagesOneByOne
+) => {
+  if (pagesOneByOne) {
+    await createPdfPagesOneByOne(qrCodesDirPath, pdfOutputDir, templatePdfPath);
+  } else {
+    await createPdfOneByOne(qrCodesDirPath, pdfOutputDir, templatePdfPath);
+  }
+};
+
+const createPdfOneByOne = async (
+  qrCodesDirPath,
+  pdfOutputDir,
+  templatePdfPath
+) => {
+  try {
+    const allFiles = await readdir(qrCodesDirPath);
+    const qrCodes = allFiles.filter((file) => file.endsWith(".png"));
+    if (qrCodes.length > 0) {
+      console.log("Inserting QR Codes from into pdf files...");
+
+      for (let i = 1; i <= qrCodes.length; i++) {
+        const outputFileName = path.join(pdfOutputDir, `flyer_${i}.pdf`);
+        try {
+          const qrCodeImagePath = qrCodesDirPath.concat("/", qrCodes[i - 1]);
+          const pdfBuffer = await readFile(templatePdfPath);
+          const pngBuffer = await readFile(qrCodeImagePath);
+
+          const existingPdf = await PDFDocument.load(pdfBuffer);
+          const pngImage = await existingPdf.embedPng(pngBuffer);
+          const existingPdfPages = existingPdf.getPages();
+          const firstPage = existingPdfPages[0];
+
+          const pngDims = pngImage.scale(0.7);
+          const xPosition = 374;
+          const yPosition = 329;
+
+          firstPage.drawImage(pngImage, {
+            x: xPosition,
+            y: yPosition,
+            width: pngDims.width,
+            height: pngDims.height,
+          });
+          const pdfBytes = await existingPdf.save(outputFileName);
+          await writeFile(outputFileName, pdfBytes);
+        } catch (err) {
+          console.log("Error copying file:", err);
+        }
+      }
+    } else {
+      console.log("No qr codes to generate flyers");
+    }
+  } catch (error) {
+    console.log("Error in generatePdfFlyers:", error);
+  }
+};
+
+const createPdfPagesOneByOne = async (
+  qrCodesDirPath,
+  pdfOutputDir,
+  templatePdfPath
 ) => {
   try {
     const allFiles = await readdir(qrCodesDirPath);
@@ -191,7 +257,6 @@ export const generatePdfFlyers = async (
       console.log("Inserting QR Codes into PDF files with size monitoring...");
       console.log(`Total QR codes to process: ${qrCodes.length}`);
 
-      // Load the template PDF once (we won't modify this)
       console.log("Loading template PDF...");
       const templatePdfBuffer = await readFile(templatePdfPath);
       const templatePdf = await PDFDocument.load(templatePdfBuffer);
@@ -205,7 +270,6 @@ export const generatePdfFlyers = async (
 
       for (let i = 0; i < qrCodes.length; i++) {
         try {
-          // Progress indicator
           if ((i + 1) % 100 === 0 || i === 0) {
             console.log(
               `Processing QR code ${i + 1}/${qrCodes.length} (${(
@@ -224,13 +288,11 @@ export const generatePdfFlyers = async (
             console.log(`Starting new PDF file: flyer_${currentPdfIndex}.pdf`);
           }
 
-          // Copy template page
           const [copiedTemplatePage] = await currentPdf.copyPages(templatePdf, [
             0,
           ]);
           currentPdf.addPage(copiedTemplatePage);
 
-          // Get the last page and add QR code
           const pages = currentPdf.getPages();
           const lastPage = pages[pages.length - 1];
 
