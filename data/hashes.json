@@ -1,25 +1,16 @@
 {
-  "baseUrl": "https://scanquest.xyz/treasure-hunt/qr",
+  "baseUrl": "https://beta.lematindimanche.caissette.ch/qr",
   "hash": [
-    "4c35c2a3-1c03-4b9f-bc26-eb62e3feb734",
-    "1df8b410-985a-41c7-95cf-b2e0b0b4889a",
-    "3f8a70b5-f560-4bc4-9d74-c1d1afb4d480",
-    "6497c130-8286-4d0a-a933-e793cbc07b51",
-    "f302d363-e0dc-45a1-ace8-47c376bcebea",
-    "99e2ce86-c2dd-464b-9edb-32576d7b3461",
-    "e63402b9-5a64-4a1f-b30e-e9d47ad2236d",
-    "fa639c53-48ef-44f0-a718-da533dc5a631",
-    "b482c609-5222-4a22-8a3d-ec71e5e104f2",
-    "29aec972-c4e4-4b59-bb66-72eac0567e77",
-    "0ed3adfc-29de-4bc8-8528-a341247d0da0",
-    "ee556beb-e1f4-4ab5-ae96-deca5120699b",
-    "13f45466-3c7d-42b4-8c3e-ebf814759ba0",
-    "a1343ee3-cd9f-4600-9e53-678f33374f35",
-    "4dbcc0af-2d8c-4cd9-b067-940a7c627987",
-    "cc47db81-6af6-440f-a126-6266cd9f20ed",
-    "4ecdcfc1-0b7e-4759-8924-518320c5ce61",
-    "09e05935-b974-4d95-bad0-906acfd3c7a2",
-    "a0c86d00-fa2a-4679-894a-857fefe70876",
-    "873ec102-3471-412e-a955-8dd66f508295"
+    "60e0bde1-1e49-432b-a1e1-5516bb937d8c",
+    "3f3234fa-d494-4fa4-8d1d-b8607886529d",
+    "ba016f05-faad-469b-842c-d516c6912e80",
+    "c5b62e26-968f-47ef-9f39-18a8dc216294",
+    "e12aa95f-af2a-494c-9e52-f32a5c682fec",
+    "b2827c90-ef24-4c02-8ec1-d6d315a14771",
+    "bdb234bc-31e6-4a39-a258-bc0a65ff401a",
+    "3ea1a88b-0ae1-49be-beb9-96cc26ccd1cf",
+    "8f64eb9b-e6cc-4585-81d7-a164eab11986",
+    "5e18dde2-cd0a-496e-9439-6eef690ef0af",
+    "5e18dde2-cd0a-496e-9439-6eef690ef0af"
   ]
 }

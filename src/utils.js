@@ -124,7 +124,10 @@ export const generateQRCodesFromJSON = async (filePath, saveDirPath) => {
         for (let i = 0; i < fileJSON.hash.length; i++) {
           const outputPath = `${saveDirPath}/qr_${i + 1}.png`;
           const hash = fileJSON.hash[i];
-          const qrDataUrl = baseUrl.concat(hash).concat(urlParams);
+          let qrDataUrl = baseUrl.concat(hash);
+          if (urlParams && urlParams.trim() !== '') {
+            qrDataUrl = qrDataUrl.concat(urlParams);
+          }
           await toFile(outputPath, qrDataUrl, { color: { light: "#0000" } });
           counter++;
         }
@@ -305,7 +308,7 @@ const createAllInOnePdf = async (
           const lastPage = pages[pages.length - 1];
 
           const pngImage = await currentPdf.embedPng(pngBuffer);
-          const pngDims = pngImage.scale(0.95);
+          const pngDims = pngImage.scale(0.5);
           const xPosition = 370;
           const yPosition = 324;
 
@@ -425,9 +428,9 @@ const createAllInOnePdfByPages = async (
           const lastPage = pages[pages.length - 1];
 
           const pngImage = await currentPdf.embedPng(pngBuffer);
-          const pngDims = pngImage.scale(0.95);
-          const xPosition = 370;
-          const yPosition = 324;
+          const pngDims = pngImage.scale(0.7);
+          const xPosition = 374;
+          const yPosition = 338;
 
           lastPage.drawImage(pngImage, {
             x: xPosition,

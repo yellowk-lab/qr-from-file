@@ -196,7 +196,6 @@ The verification system helps ensure that all your generated PDF files and QR co
 ```bash
 npm run verify <pdf-directory> <qr-directory> <json-file>
 ```
-
 ### Example workflow:
 1. Generate QR codes and PDFs: `node src/index.js 10 "https://example.com/qr" "" true`
 2. Verify the output: `npm run verify ./outputs/qr-codes-1234567890/flyers/pdf ./outputs/qr-codes-1234567890/qrs ./outputs/qr-codes-1234567890/qr-codes-1234567890.json`

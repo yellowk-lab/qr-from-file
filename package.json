@@ -8,7 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node src/index.js",
     "verify": "node src/index.js verify",
-    "example": "node example-verification.js"
+    "example": "node example-verification.js",
+    "generate": "node ./src/generate-qr.js"
   },
   "keywords": [],
   "author": "YellowK Labs",
